@@ -1,78 +1,42 @@
-plugins {
-    id 'java-library'
-    id 'net.neoforged.moddev' version '2.0.141'
-    id 'idea'
+def isWindows = System.getProperty('os.name').toLowerCase().contains('win')
+def gradleBin = isWindows ? 'gradlew.bat' : './gradlew'
+
+def targets = [
+        '1.20.1-forge'   : 'setupForge1201',
+        '1.20.1-fabric'  : 'setupFabric1201',
+        '1.21.1-neoforge': 'setupNeoForge1211',
+        '1.21.1-fabric'  : 'setupFabric1211',
+]
+
+def selectedTarget = providers.gradleProperty('target').orNull
+
+if (selectedTarget != null && !targets.containsKey(selectedTarget)) {
+    throw new GradleException("Unknown target '${selectedTarget}'. Available: ${targets.keySet().join(', ')}")
 }
 
-tasks.named('wrapper', Wrapper).configure {
-    distributionType = Wrapper.DistributionType.BIN
-}
-
-version = mod_version
-group = mod_group_id
-
-base {
-    archivesName = mod_id
-}
-
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
-
-neoForge {
-    version = project.neo_version
-
-    parchment {
-        mappingsVersion = project.parchment_mappings_version
-        minecraftVersion = project.parchment_minecraft_version
-    }
-
-    runs {
-        client {
-            client()
-        }
-        server {
-            server()
-            programArgument '--nogui'
-        }
-        configureEach {
-            logLevel = org.slf4j.event.Level.INFO
-        }
-    }
-
-    mods {
-        "${mod_id}" {
-            sourceSet(sourceSets.main)
-        }
+targets.each { name, taskName ->
+    tasks.register(taskName, Exec) {
+        group = 'setup'
+        description = "Resolves and caches dependencies for ${name} (no compilation)"
+        workingDir = file(name)
+        commandLine gradleBin, 'dependencies', '--console', 'plain'
     }
 }
 
-var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
-    var replaceProperties = [
-            minecraft_version      : minecraft_version,
-            minecraft_version_range: minecraft_version_range,
-            neo_version            : neo_version,
-            loader_version_range   : loader_version_range,
-            mod_id                 : mod_id,
-            mod_name               : mod_name,
-            mod_license            : mod_license,
-            mod_version            : mod_version,
-            mod_authors            : mod_authors,
-            mod_description        : mod_description,
-    ]
-    inputs.properties replaceProperties
-    expand replaceProperties
-    from "src/main/templates"
-    into "build/generated/sources/modMetadata"
-}
-sourceSets.main.resources.srcDir generateModMetadata
-neoForge.ideSyncTask generateModMetadata
-
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
+tasks.register('setup') {
+    group = 'setup'
+    description = 'Prepares the Gradle environment of every target, or only the one given with -Ptarget='
+    if (selectedTarget != null) {
+        dependsOn tasks.named(targets[selectedTarget])
+    } else {
+        targets.values().each { dependsOn tasks.named(it) }
+    }
 }
 
-idea {
-    module {
-        downloadSources = true
-        downloadJavadoc = true
+tasks.register('variants') {
+    group = 'help'
+    description = 'Lists every target'
+    doLast {
+        targets.keySet().each { println " - ${it}" }
     }
 }
