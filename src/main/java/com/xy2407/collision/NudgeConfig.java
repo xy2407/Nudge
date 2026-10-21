@@ -14,7 +14,9 @@ public final class NudgeConfig {
     private static final ModConfigSpec.BooleanValue ENABLE_PUSH_THROTTLE;
     private static final ModConfigSpec.IntValue PUSH_INTERVAL;
     private static final ModConfigSpec.BooleanValue ENABLE_TRAVEL_THROTTLE;
+    private static final ModConfigSpec.BooleanValue ENABLE_BLOCK_CACHE;
     private static final ModConfigSpec.IntValue STATIONARY_INTERVAL;
+    private static final ModConfigSpec.IntValue SUPPORT_INTERVAL;
     public static final ModConfigSpec SPEC;
 
     private static volatile boolean gridEnabled = true;
@@ -23,7 +25,9 @@ public final class NudgeConfig {
     private static volatile boolean pushThrottleEnabled = true;
     private static volatile int pushInterval = 10;
     private static volatile boolean travelThrottleEnabled = true;
-    private static volatile int stationaryInterval = 20;
+    private static volatile boolean blockCacheEnabled = true;
+    private static volatile int stationaryInterval = 40;
+    private static volatile int supportInterval = 10;
 
     private NudgeConfig() {
     }
@@ -42,8 +46,12 @@ public final class NudgeConfig {
                 .defineInRange("pushTickInterval", 10, 1, 200);
         ENABLE_TRAVEL_THROTTLE = builder.comment("Run travel for stationary entities once every stationaryTravelInterval ticks")
                 .define("enableTravelThrottle", true);
+        ENABLE_BLOCK_CACHE = builder.comment("Skip empty blocks in block collision scans with per-section occupancy bitmaps")
+                .define("enableBlockOccupancyCache", true);
         STATIONARY_INTERVAL = builder.comment("Interval in ticks between travel runs of a stationary entity")
-                .defineInRange("stationaryTravelInterval", 20, 1, 1200);
+                .defineInRange("stationaryTravelInterval", 40, 1, 1200);
+        SUPPORT_INTERVAL = builder.comment("Interval in ticks between ground support checks of a throttled entity")
+                .defineInRange("supportCheckInterval", 10, 1, 1200);
         SPEC = builder.build();
         refresh();
     }
@@ -62,7 +70,9 @@ public final class NudgeConfig {
         pushThrottleEnabled = loaded ? ENABLE_PUSH_THROTTLE.get() : ENABLE_PUSH_THROTTLE.getDefault();
         pushInterval = loaded ? PUSH_INTERVAL.get() : PUSH_INTERVAL.getDefault();
         travelThrottleEnabled = loaded ? ENABLE_TRAVEL_THROTTLE.get() : ENABLE_TRAVEL_THROTTLE.getDefault();
+        blockCacheEnabled = loaded ? ENABLE_BLOCK_CACHE.get() : ENABLE_BLOCK_CACHE.getDefault();
         stationaryInterval = loaded ? STATIONARY_INTERVAL.get() : STATIONARY_INTERVAL.getDefault();
+        supportInterval = loaded ? SUPPORT_INTERVAL.get() : SUPPORT_INTERVAL.getDefault();
     }
 
     public static boolean gridActive() {
@@ -89,7 +99,15 @@ public final class NudgeConfig {
         return SPEC.isLoaded() && travelThrottleEnabled;
     }
 
+    public static boolean blockCacheActive() {
+        return SPEC.isLoaded() && blockCacheEnabled;
+    }
+
     public static int stationaryInterval() {
         return stationaryInterval;
+    }
+
+    public static int supportInterval() {
+        return supportInterval;
     }
 }

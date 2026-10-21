@@ -4,7 +4,10 @@
   "package": "com.xy2407.collision.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "BlockCollisionsMixin",
+    "EntityCollideMixin",
     "EntityMixin",
+    "LevelChunkSectionMixin",
     "LevelMixin",
     "LevelQueryMixin",
     "LivingEntityMixin"
