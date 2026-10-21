@@ -5,8 +5,11 @@
   "compatibilityLevel": "JAVA_21",
   "refmap": "nudge.refmap.json",
   "mixins": [
+    "BlockCollisionsMixin",
+    "EntityCollideMixin",
     "EntityMixin",
     "EntityCollisionMixin",
+    "LevelChunkSectionMixin",
     "LevelMixin",
     "LevelQueryMixin",
     "LivingEntityMixin"

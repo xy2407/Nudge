@@ -35,14 +35,18 @@ public final class NudgeConfig {
         props.putIfAbsent("enablePushThrottle", "true");
         props.putIfAbsent("pushTickInterval", "10");
         props.putIfAbsent("enableTravelThrottle", "true");
-        props.putIfAbsent("stationaryTravelInterval", "20");
+        props.putIfAbsent("stationaryTravelInterval", "40");
+        props.putIfAbsent("supportCheckInterval", "10");
+        props.putIfAbsent("enableBlockOccupancyCache", "true");
         NudgeCore.setGridEnabled(readBool(props, "enableCollisionGrid", true));
         NudgeCore.setPushIndexEnabled(readBool(props, "enablePushIndex", true));
         NudgeCore.setEntityQueryEnabled(readBool(props, "enableEntityQueryIndex", true));
         NudgeCore.setPushThrottleEnabled(readBool(props, "enablePushThrottle", true));
         NudgeCore.setPushInterval(readInt(props, "pushTickInterval", 10));
         NudgeCore.setTravelThrottleEnabled(readBool(props, "enableTravelThrottle", true));
-        NudgeCore.setStationaryInterval(readInt(props, "stationaryTravelInterval", 20));
+        NudgeCore.setStationaryInterval(readInt(props, "stationaryTravelInterval", 40));
+        NudgeCore.setSupportInterval(readInt(props, "supportCheckInterval", 10));
+        NudgeCore.setBlockCacheEnabled(readBool(props, "enableBlockOccupancyCache", true));
         try (OutputStream out = Files.newOutputStream(path)) {
             props.store(out, "Nudge server config");
         } catch (IOException ignored) {

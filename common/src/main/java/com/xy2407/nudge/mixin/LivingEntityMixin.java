@@ -32,6 +32,9 @@ public abstract class LivingEntityMixin {
     @Unique
     private int nudge$stillTicks;
 
+    @Unique
+    private int nudge$supportTicks;
+
     @Inject(method = "pushEntities", at = @At("HEAD"), cancellable = true, require = 0)
     private void nudge$throttlePush(CallbackInfo ci) {
         if (!NudgeCore.pushThrottleActive()) {
@@ -65,6 +68,7 @@ public abstract class LivingEntityMixin {
         if (!nudge$canThrottleTravel(self)) {
             nudge$lastTravelPos = null;
             nudge$stillTicks = 0;
+            nudge$supportTicks = 0;
             return;
         }
         Vec3 current = self.position();
@@ -73,16 +77,33 @@ public abstract class LivingEntityMixin {
         nudge$lastTravelPos = current;
         if (!stable) {
             nudge$stillTicks = 1;
+            nudge$supportTicks = 0;
             return;
         }
         nudge$stillTicks++;
         if (nudge$stillTicks < Math.max(1, NudgeCore.stationaryInterval())) {
+            nudge$supportTicks++;
+            if (nudge$supportTicks >= Math.max(1, NudgeCore.supportInterval())) {
+                nudge$supportTicks = 0;
+                if (!nudge$hasSupport(self)) {
+                    nudge$lastTravelPos = null;
+                    nudge$stillTicks = 0;
+                    return;
+                }
+            }
             Vec3 movement = self.getDeltaMovement();
             self.setDeltaMovement(new Vec3(movement.x, 0.0D, movement.z));
             ci.cancel();
             return;
         }
         nudge$stillTicks = 0;
+    }
+
+    @Unique
+    private static boolean nudge$hasSupport(LivingEntity self) {
+        AABB box = self.getBoundingBox();
+        AABB slab = new AABB(box.minX, box.minY - 1.0E-6D, box.minZ, box.maxX, box.minY, box.maxZ);
+        return self.level().findSupportingBlock(self, slab).isPresent();
     }
 
     @Unique

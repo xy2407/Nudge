@@ -15,6 +15,7 @@ public final class Nudge {
 
     public Nudge() {
         NudgeCore.init();
+        BlockCacheSetup.install();
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, NudgeConfig.SPEC);
         FMLJavaModLoadingContext.get().getModEventBus().addListener(NudgeConfig::onConfigEvent);
     }

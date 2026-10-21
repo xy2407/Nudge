@@ -13,7 +13,9 @@ public final class NudgeCore {
     private static volatile boolean pushThrottleEnabled = true;
     private static volatile int pushInterval = 10;
     private static volatile boolean travelThrottleEnabled = true;
-    private static volatile int stationaryInterval = 20;
+    private static volatile int stationaryInterval = 40;
+    private static volatile int supportInterval = 10;
+    private static volatile boolean blockCacheEnabled = true;
 
     private NudgeCore() {
     }
@@ -51,6 +53,14 @@ public final class NudgeCore {
         return stationaryInterval;
     }
 
+    public static int supportInterval() {
+        return supportInterval;
+    }
+
+    public static boolean blockCacheActive() {
+        return blockCacheEnabled;
+    }
+
     public static void setGridEnabled(boolean value) {
         gridEnabled = value;
     }
@@ -77,5 +87,13 @@ public final class NudgeCore {
 
     public static void setStationaryInterval(int value) {
         stationaryInterval = Math.max(1, value);
+    }
+
+    public static void setSupportInterval(int value) {
+        supportInterval = Math.max(1, value);
+    }
+
+    public static void setBlockCacheEnabled(boolean value) {
+        blockCacheEnabled = value;
     }
 }

@@ -15,6 +15,7 @@ public final class Nudge {
 
     public Nudge(IEventBus modEventBus, ModContainer modContainer) {
         NudgeCore.init();
+        BlockCacheSetup.install();
         modContainer.registerConfig(ModConfig.Type.SERVER, NudgeConfig.SPEC);
         modEventBus.addListener(NudgeConfig::onConfigEvent);
     }

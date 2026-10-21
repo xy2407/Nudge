@@ -15,6 +15,8 @@ public final class NudgeConfig {
     private static final ModConfigSpec.IntValue PUSH_INTERVAL;
     private static final ModConfigSpec.BooleanValue ENABLE_TRAVEL_THROTTLE;
     private static final ModConfigSpec.IntValue STATIONARY_INTERVAL;
+    private static final ModConfigSpec.IntValue SUPPORT_INTERVAL;
+    private static final ModConfigSpec.BooleanValue ENABLE_BLOCK_CACHE;
     public static final ModConfigSpec SPEC;
 
     private NudgeConfig() {
@@ -35,7 +37,11 @@ public final class NudgeConfig {
         ENABLE_TRAVEL_THROTTLE = builder.comment("Skip physics for stationary entities")
                 .define("enableTravelThrottle", true);
         STATIONARY_INTERVAL = builder.comment("Ticks between travel runs of a stationary entity")
-                .defineInRange("stationaryTravelInterval", 20, 1, 1200);
+                .defineInRange("stationaryTravelInterval", 40, 1, 1200);
+        SUPPORT_INTERVAL = builder.comment("Interval in ticks between ground support checks of a throttled entity")
+                .defineInRange("supportCheckInterval", 10, 1, 1200);
+        ENABLE_BLOCK_CACHE = builder.comment("Skip empty blocks in block collision scans with per-section occupancy bitmaps")
+                .define("enableBlockOccupancyCache", true);
         SPEC = builder.build();
         refresh();
     }
@@ -55,5 +61,7 @@ public final class NudgeConfig {
         NudgeCore.setPushInterval(loaded ? PUSH_INTERVAL.get() : PUSH_INTERVAL.getDefault());
         NudgeCore.setTravelThrottleEnabled(loaded ? ENABLE_TRAVEL_THROTTLE.get() : ENABLE_TRAVEL_THROTTLE.getDefault());
         NudgeCore.setStationaryInterval(loaded ? STATIONARY_INTERVAL.get() : STATIONARY_INTERVAL.getDefault());
+        NudgeCore.setSupportInterval(loaded ? SUPPORT_INTERVAL.get() : SUPPORT_INTERVAL.getDefault());
+        NudgeCore.setBlockCacheEnabled(loaded ? ENABLE_BLOCK_CACHE.get() : ENABLE_BLOCK_CACHE.getDefault());
     }
 }

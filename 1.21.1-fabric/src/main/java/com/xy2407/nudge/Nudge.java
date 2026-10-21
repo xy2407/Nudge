@@ -15,6 +15,7 @@ public final class Nudge implements ModInitializer {
     public void onInitialize() {
         NudgeCore.init();
         NudgeConfig.load();
+        BlockCacheSetup.install();
         CommonEvents.register();
     }
 }
