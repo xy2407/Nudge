@@ -5,12 +5,15 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
+import net.neoforged.neoforge.event.TagsUpdatedEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 import com.xy2407.collision.CollisionGrid;
 import com.xy2407.collision.Nudge;
+import com.xy2407.collision.block.BlockSectionCache;
+import com.xy2407.collision.block.LadderCache;
 
 /**
  * Server events that drive grid maintenance, entity tracking and cleanup
@@ -23,6 +26,7 @@ public final class CommonEvents {
 
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
+        BlockSectionCache.tickBuilds();
         for (ServerLevel level : event.getServer().getAllLevels()) {
             CollisionGrid.tick(level);
         }
@@ -50,7 +54,13 @@ public final class CommonEvents {
     }
 
     @SubscribeEvent
+    public static void onTagsUpdated(TagsUpdatedEvent event) {
+        LadderCache.clear();
+    }
+
+    @SubscribeEvent
     public static void onServerStopping(ServerStoppingEvent event) {
         CollisionGrid.clear();
+        LadderCache.clear();
     }
 }

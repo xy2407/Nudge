@@ -1,6 +1,7 @@
 package com.xy2407.collision.mixin;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Predicate;
 
 import org.spongepowered.asm.mixin.Mixin;
@@ -14,10 +15,16 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.xy2407.collision.CollisionGrid;
 import com.xy2407.collision.NudgeConfig;
+import com.xy2407.collision.block.SupportBlockScan;
+import com.xy2407.collision.duck.NudgeEntityHooks;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntitySelector;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -39,16 +46,53 @@ public abstract class LivingEntityMixin {
 
     @Inject(method = "pushEntities", at = @At("HEAD"), cancellable = true)
     private void nudge$throttlePush(CallbackInfo ci) {
-        if (!NudgeConfig.pushThrottleActive()) {
-            return;
-        }
         Entity self = (Entity) (Object) this;
         if (self instanceof Player) {
             return;
         }
+        if (NudgeConfig.crowdPushActive() && self.level() instanceof ServerLevel serverLevel) {
+            int crowdSize = CollisionGrid.crowdPushSize(serverLevel, self);
+            int threshold = NudgeConfig.crowdPushThreshold();
+            int limit = NudgeConfig.crowdPushLimit();
+            if (crowdSize > threshold && (limit <= 0 || crowdSize <= limit)
+                    && CollisionGrid.crowdPush(serverLevel, self)) {
+                ci.cancel();
+                return;
+            }
+        }
+        if (!NudgeConfig.pushThrottleActive()) {
+            return;
+        }
         int interval = Math.max(1, NudgeConfig.pushInterval());
         if (Math.floorMod(self.tickCount + self.getId(), interval) != 0) {
+            nudge$tickCramming((LivingEntity) self);
             ci.cancel();
+        }
+    }
+
+    @Unique
+    private static void nudge$tickCramming(LivingEntity self) {
+        if (!(self.level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        int max = serverLevel.getGameRules().getInt(GameRules.RULE_MAX_ENTITY_CRAMMING);
+        if (max <= 0) {
+            return;
+        }
+        List<Entity> candidates = CollisionGrid.pushCandidates(serverLevel, self, self.getBoundingBox());
+        if (candidates == null) {
+            candidates = serverLevel.getEntities(self, self.getBoundingBox(), EntitySelector.pushableBy(self));
+        }
+        if (candidates.size() > max - 1 && self.getRandom().nextInt(4) == 0) {
+            int count = 0;
+            for (Entity candidate : candidates) {
+                if (!candidate.isPassenger()) {
+                    count++;
+                }
+            }
+            if (count > max - 1) {
+                self.hurt(self.damageSources().cramming(), 6.0F);
+            }
         }
     }
 
@@ -100,6 +144,7 @@ public abstract class LivingEntityMixin {
             }
             Vec3 movement = self.getDeltaMovement();
             self.setDeltaMovement(new Vec3(movement.x, 0.0D, movement.z));
+            ((NudgeEntityHooks) (Object) self).nudge$tickStationaryBlockEffects();
             return;
         }
         nudge$stillTicks = 0;
@@ -110,7 +155,8 @@ public abstract class LivingEntityMixin {
     private static boolean nudge$hasSupport(LivingEntity self) {
         AABB box = self.getBoundingBox();
         AABB slab = new AABB(box.minX, box.minY - 1.0E-6D, box.minZ, box.maxX, box.minY, box.maxZ);
-        return self.level().findSupportingBlock(self, slab).isPresent();
+        Optional<BlockPos> fast = SupportBlockScan.findSupportingBlock(self.level(), self, slab);
+        return fast != null ? fast.isPresent() : self.level().findSupportingBlock(self, slab).isPresent();
     }
 
     @Unique

@@ -7,10 +7,12 @@
     "BlockCollisionsMixin",
     "EntityCollideMixin",
     "EntityMixin",
+    "LadderCacheMixin",
     "LevelChunkSectionMixin",
     "LevelMixin",
     "LevelQueryMixin",
-    "LivingEntityMixin"
+    "LivingEntityMixin",
+    "SupportBlockMixin"
   ],
   "client": [],
   "injectors": {

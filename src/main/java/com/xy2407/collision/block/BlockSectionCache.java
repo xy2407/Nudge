@@ -1,5 +1,8 @@
 package com.xy2407.collision.block;
 
+import java.util.ArrayDeque;
+import java.util.Queue;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.MinecraftServer;
@@ -36,10 +39,28 @@ public final class BlockSectionCache {
         }
     };
 
+    private static final Queue<BlockSectionCache> PENDING = new ArrayDeque<>();
+    private static final int BUILD_BUDGET = 1024;
+
     private final long[] occupancy = new long[64];
     private int nonEmptyCount;
+    private LevelChunkSection section;
+    private boolean built;
+    private int cursor;
 
     private BlockSectionCache() {
+    }
+
+    public static void tickBuilds() {
+        int budget = BUILD_BUDGET;
+        while (budget > 0 && !PENDING.isEmpty()) {
+            BlockSectionCache cache = PENDING.peek();
+            int processed = cache.buildStep(budget);
+            budget -= processed;
+            if (cache.built || processed == 0) {
+                PENDING.poll();
+            }
+        }
     }
 
     public static BlockState fastState(BlockGetter blockGetter, BlockPos pos) {
@@ -63,12 +84,45 @@ public final class BlockSectionCache {
                 return null;
             }
         }
+        if (!cache.built) {
+            return null;
+        }
         if (cache.nonEmptyCount == 0) {
             return Blocks.AIR.defaultBlockState();
         }
         int cell = (pos.getY() & 15) << 8 | (pos.getZ() & 15) << 4 | (pos.getX() & 15);
         return (cache.occupancy[cell >> 6] & 1L << (cell & 63)) == 0L
                 ? Blocks.AIR.defaultBlockState() : null;
+    }
+
+    public static boolean contextDependent(BlockState state) {
+        return CONTEXT_DEPENDENT.get(state.getBlock().getClass());
+    }
+
+    public static BlockSectionCache sectionCache(Level level, LevelChunk chunk, int y) {
+        if (!NudgeConfig.blockCacheActive()) {
+            return null;
+        }
+        LevelChunkSection[] sections = chunk.getSections();
+        int section = SectionPos.blockToSectionCoord(y) - chunk.getMinSection();
+        if (section < 0 || section >= sections.length) {
+            return null;
+        }
+        NudgeSectionCacheHolder holder = (NudgeSectionCacheHolder) sections[section];
+        BlockSectionCache cache = holder.nudge$getBlockCache();
+        if (cache == null) {
+            cache = tryBuild(holder, sections[section], level);
+        }
+        return cache != null && cache.built ? cache : null;
+    }
+
+    boolean empty() {
+        return nonEmptyCount == 0;
+    }
+
+    boolean occupied(int x, int y, int z) {
+        int cell = (y & 15) << 8 | (z & 15) << 4 | (x & 15);
+        return (occupancy[cell >> 6] & 1L << (cell & 63)) != 0L;
     }
 
     private static BlockSectionCache tryBuild(NudgeSectionCacheHolder holder,
@@ -78,21 +132,28 @@ public final class BlockSectionCache {
             return null;
         }
         BlockSectionCache cache = new BlockSectionCache();
-        cache.scan(section);
+        cache.section = section;
         holder.nudge$setBlockCache(cache);
+        PENDING.add(cache);
         return cache;
     }
 
-    private void scan(LevelChunkSection section) {
-        for (int y = 0; y < 16; y++) {
-            for (int z = 0; z < 16; z++) {
-                for (int x = 0; x < 16; x++) {
-                    if (occupies(section.getBlockState(x, y, z))) {
-                        setBit(x, y, z);
-                    }
-                }
+    private int buildStep(int budget) {
+        int processed = 0;
+        while (processed < budget && cursor < 4096) {
+            int cell = cursor++;
+            int x = cell & 15;
+            int z = (cell >> 4) & 15;
+            int y = cell >> 8;
+            if (occupies(section.getBlockState(x, y, z))) {
+                setBit(x, y, z);
             }
+            processed++;
         }
+        if (cursor >= 4096) {
+            built = true;
+        }
+        return processed;
     }
 
     public void update(int x, int y, int z, BlockState state) {
@@ -112,8 +173,11 @@ public final class BlockSectionCache {
 
     private void setBit(int x, int y, int z) {
         int cell = (y & 15) << 8 | (z & 15) << 4 | (x & 15);
-        occupancy[cell >> 6] |= 1L << (cell & 63);
-        nonEmptyCount++;
+        long bit = 1L << (cell & 63);
+        if ((occupancy[cell >> 6] & bit) == 0L) {
+            occupancy[cell >> 6] |= bit;
+            nonEmptyCount++;
+        }
     }
 
     private static boolean occupies(BlockState state) {

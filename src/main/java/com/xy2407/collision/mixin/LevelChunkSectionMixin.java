@@ -4,6 +4,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import com.xy2407.collision.block.BlockSectionCache;
@@ -38,5 +39,15 @@ public abstract class LevelChunkSectionMixin implements NudgeSectionCacheHolder 
         if (nudge$blockCache != null) {
             nudge$blockCache.update(x, y, z, state);
         }
+    }
+
+    @Inject(method = "read(Lnet/minecraft/network/FriendlyByteBuf;)V", at = @At("TAIL"))
+    private void nudge$onRead(CallbackInfo ci) {
+        nudge$blockCache = null;
+    }
+
+    @Inject(method = "recalcBlockCounts()V", at = @At("TAIL"))
+    private void nudge$onRecalcBlockCounts(CallbackInfo ci) {
+        nudge$blockCache = null;
     }
 }
