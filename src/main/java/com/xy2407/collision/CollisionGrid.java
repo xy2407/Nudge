@@ -71,7 +71,11 @@ public final class CollisionGrid {
     private static final Map<ServerLevel, CollisionGrid> GRIDS = new HashMap<>();
     private static final ThreadLocal<List<Entity>> CANDIDATE_BUFFER = ThreadLocal.withInitial(ArrayList::new);
     private static final ThreadLocal<List<Entity>> PUSH_BUFFER = ThreadLocal.withInitial(ArrayList::new);
+    private static final ThreadLocal<List<Entity>> GROUP_BUFFER = ThreadLocal.withInitial(ArrayList::new);
     private static final ThreadLocal<List<VoxelShape>> SHAPE_BUFFER = ThreadLocal.withInitial(ArrayList::new);
+
+    private static Vec3[] crowdVectors;
+    private static double crowdVectorsStrength = Double.NaN;
 
     private final Long2ObjectOpenHashMap<Bucket> buckets = new Long2ObjectOpenHashMap<>();
     private final Map<UUID, Tracked> tracked = new HashMap<>();
@@ -86,6 +90,7 @@ public final class CollisionGrid {
     private long sweepCount;
     private boolean initialized;
     private boolean dragonPresent;
+    private int crammingMax = -1;
 
     private static final class Bucket {
         final ObjectLinkedOpenHashSet<Entity> collidable = new ObjectLinkedOpenHashSet<>();
@@ -149,6 +154,7 @@ public final class CollisionGrid {
             initialized = false;
             return;
         }
+        crammingMax = level.getGameRules().getInt(GameRules.RULE_MAX_ENTITY_CRAMMING);
         if (!initialized) {
             doFullRebuild(level);
             return;
@@ -314,24 +320,42 @@ public final class CollisionGrid {
             grid.crowdCells.remove(cell);
             return false;
         }
-        List<Entity> group = new ArrayList<>(size);
+        List<Entity> group = GROUP_BUFFER.get();
+        group.clear();
         group.add(entity);
         group.addAll(candidates);
         int offset = (int) Math.floorMod(gameTime + entity.getId(), (long) CROWD_DIRECTIONS.length);
-        double strength = NudgeConfig.crowdPushStrength();
-        for (int i = 0; i < group.size(); i++) {
+        Vec3[] vectors = crowdVectors();
+        for (int i = 0, n = group.size(); i < n; i++) {
             Entity member = group.get(i);
             if (member.isRemoved()) {
                 continue;
             }
-            double[] direction = CROWD_DIRECTIONS[(i + offset) % CROWD_DIRECTIONS.length];
-            if (direction[0] == 0.0D && direction[1] == 0.0D) {
-                continue;
+            Vec3 push = vectors[(i + offset) % vectors.length];
+            if (push != null) {
+                member.push(push);
             }
-            member.push(new Vec3(direction[0] * strength, 0.0D, direction[1] * strength));
         }
-        crowdCramming(level, group);
+        grid.crowdCramming(group);
         return true;
+    }
+
+    private static Vec3[] crowdVectors() {
+        double strength = NudgeConfig.crowdPushStrength();
+        Vec3[] cached = crowdVectors;
+        if (cached != null && crowdVectorsStrength == strength) {
+            return cached;
+        }
+        Vec3[] built = new Vec3[CROWD_DIRECTIONS.length];
+        for (int i = 0; i < CROWD_DIRECTIONS.length; i++) {
+            double[] direction = CROWD_DIRECTIONS[i];
+            built[i] = direction[0] == 0.0D && direction[1] == 0.0D
+                    ? null
+                    : new Vec3(direction[0] * strength, 0.0D, direction[1] * strength);
+        }
+        crowdVectors = built;
+        crowdVectorsStrength = strength;
+        return built;
     }
 
     private long crowdCell(Tracked t) {
@@ -339,8 +363,8 @@ public final class CollisionGrid {
         return BlockPos.asLong(cellOf(entity.getX()), cellOf(entity.getY()), cellOf(entity.getZ()));
     }
 
-    private static void crowdCramming(ServerLevel level, List<Entity> group) {
-        int max = level.getGameRules().getInt(GameRules.RULE_MAX_ENTITY_CRAMMING);
+    private void crowdCramming(List<Entity> group) {
+        int max = crammingMax;
         if (max <= 0 || group.size() <= max - 1) {
             return;
         }
@@ -556,10 +580,16 @@ public final class CollisionGrid {
                     if (bucket == null) {
                         continue;
                     }
-                    deliver(bucket.collidable, self, query, predicate, out, stamp);
+                    if (!bucket.collidable.isEmpty()) {
+                        deliver(bucket.collidable, self, query, predicate, out, stamp);
+                    }
                     if (pairAware) {
-                        deliver(bucket.pushable, self, query, predicate, out, stamp);
-                        deliver(bucket.plain, self, query, predicate, out, stamp);
+                        if (!bucket.pushable.isEmpty()) {
+                            deliver(bucket.pushable, self, query, predicate, out, stamp);
+                        }
+                        if (!bucket.plain.isEmpty()) {
+                            deliver(bucket.plain, self, query, predicate, out, stamp);
+                        }
                     }
                 }
             }
@@ -575,7 +605,7 @@ public final class CollisionGrid {
             for (int cy = cellOf(query.minY) - 1; cy <= cellOf(query.maxY) + 1; cy++) {
                 for (int cz = cellOf(query.minZ) - 1; cz <= cellOf(query.maxZ) + 1; cz++) {
                     Bucket bucket = buckets.get(BlockPos.asLong(cx, cy, cz));
-                    if (bucket != null) {
+                    if (bucket != null && !bucket.pushable.isEmpty()) {
                         deliverPushing(bucket.pushable, except, query, predicate, out, stamp);
                     }
                 }
@@ -587,7 +617,7 @@ public final class CollisionGrid {
     private static void deliverPushing(Iterable<Entity> set, Entity except, AABB query,
                                        Predicate<? super Entity> predicate, List<Entity> out, long stamp) {
         for (Entity candidate : set) {
-            if (candidate == except || !candidate.getBoundingBox().intersects(query)) {
+            if (candidate == except) {
                 continue;
             }
             if (candidate instanceof EntityStamp stampable) {
@@ -595,6 +625,9 @@ public final class CollisionGrid {
                     continue;
                 }
                 stampable.nudgeSetQueryStamp(stamp);
+            }
+            if (!candidate.getBoundingBox().intersects(query)) {
+                continue;
             }
             if (predicate == null || predicate.test(candidate)) {
                 out.add(candidate);
@@ -605,7 +638,7 @@ public final class CollisionGrid {
     private static void deliver(Iterable<Entity> set, Entity except, AABB query,
                                 Predicate<? super Entity> predicate, List<Entity> out, long stamp) {
         for (Entity candidate : set) {
-            if (candidate == except || !candidate.getBoundingBox().intersects(query)) {
+            if (candidate == except) {
                 continue;
             }
             if (candidate instanceof EntityStamp stampable) {
@@ -613,6 +646,9 @@ public final class CollisionGrid {
                     continue;
                 }
                 stampable.nudgeSetQueryStamp(stamp);
+            }
+            if (!candidate.getBoundingBox().intersects(query)) {
+                continue;
             }
             if (predicate == null || predicate.test(candidate)) {
                 out.add(candidate);

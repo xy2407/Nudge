@@ -49,6 +49,7 @@ public final class SupportBlockScan {
         }
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         VoxelShape boxShape = Shapes.create(slab);
+        net.minecraft.world.phys.Vec3 center = entity.position();
         BlockPos bestPos = null;
         double bestDist = Double.MAX_VALUE;
         LevelChunk chunk = null;
@@ -121,7 +122,7 @@ public final class SupportBlockScan {
                         }
                     }
                     BlockPos candidate = cursor.immutable();
-                    double dist = candidate.distToCenterSqr(entity.position());
+                    double dist = candidate.distToCenterSqr(center);
                     if (dist < bestDist || (dist == bestDist && (bestPos == null || bestPos.compareTo(candidate) < 0))) {
                         bestPos = candidate;
                         bestDist = dist;
