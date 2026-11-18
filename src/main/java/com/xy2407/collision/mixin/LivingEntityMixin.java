@@ -21,7 +21,6 @@ import com.xy2407.collision.duck.NudgeEntityHooks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntitySelector;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.GameRules;
@@ -65,33 +64,39 @@ public abstract class LivingEntityMixin {
         }
         int interval = Math.max(1, NudgeConfig.pushInterval());
         if (Math.floorMod(self.tickCount + self.getId(), interval) != 0) {
-            nudge$tickCramming((LivingEntity) self);
             ci.cancel();
+            return;
         }
+        nudge$compensateCramming((LivingEntity) self, interval);
     }
 
     @Unique
-    private static void nudge$tickCramming(LivingEntity self) {
-        if (!(self.level() instanceof ServerLevel serverLevel)) {
+    private static void nudge$compensateCramming(LivingEntity self, int interval) {
+        int rolls = interval - 1;
+        if (rolls <= 0 || !(self.level() instanceof ServerLevel serverLevel)) {
             return;
         }
         int max = serverLevel.getGameRules().getInt(GameRules.RULE_MAX_ENTITY_CRAMMING);
-        if (max <= 0) {
+        if (max <= 0 || self.isInvulnerableTo(self.damageSources().cramming())) {
             return;
         }
         List<Entity> candidates = CollisionGrid.pushCandidates(serverLevel, self, self.getBoundingBox());
-        if (candidates == null) {
-            candidates = serverLevel.getEntities(self, self.getBoundingBox(), EntitySelector.pushableBy(self));
+        if (candidates == null || candidates.size() <= max - 1) {
+            return;
         }
-        if (candidates.size() > max - 1 && self.getRandom().nextInt(4) == 0) {
-            int count = 0;
-            for (Entity candidate : candidates) {
-                if (!candidate.isPassenger()) {
-                    count++;
-                }
+        int count = 0;
+        for (Entity candidate : candidates) {
+            if (!candidate.isPassenger()) {
+                count++;
             }
-            if (count > max - 1) {
+        }
+        if (count <= max - 1) {
+            return;
+        }
+        for (int i = 0; i < rolls; i++) {
+            if (self.getRandom().nextInt(4) == 0) {
                 self.hurt(self.damageSources().cramming(), 6.0F);
+                break;
             }
         }
     }

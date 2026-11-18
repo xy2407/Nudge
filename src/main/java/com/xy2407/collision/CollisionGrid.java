@@ -550,16 +550,23 @@ public final class CollisionGrid {
     private List<Entity> collectGeneric(Entity except, AABB query,
                                         Predicate<? super Entity> predicate, List<Entity> out) {
         long stamp = QUERY_ID.incrementAndGet();
-        for (int cx = cellOf(query.minX) - 1; cx <= cellOf(query.maxX) + 1; cx++) {
-            for (int cy = cellOf(query.minY) - 1; cy <= cellOf(query.maxY) + 1; cy++) {
-                for (int cz = cellOf(query.minZ) - 1; cz <= cellOf(query.maxZ) + 1; cz++) {
+        AABB cellBox = query.inflate(AABB_SWEEP_EPSILON);
+        for (int cx = cellOf(cellBox.minX); cx <= cellOf(cellBox.maxX); cx++) {
+            for (int cy = cellOf(cellBox.minY); cy <= cellOf(cellBox.maxY); cy++) {
+                for (int cz = cellOf(cellBox.minZ); cz <= cellOf(cellBox.maxZ); cz++) {
                     Bucket bucket = buckets.get(BlockPos.asLong(cx, cy, cz));
                     if (bucket == null) {
                         continue;
                     }
-                    deliver(bucket.collidable, except, query, predicate, out, stamp);
-                    deliver(bucket.pushable, except, query, predicate, out, stamp);
-                    deliver(bucket.plain, except, query, predicate, out, stamp);
+                    if (!bucket.collidable.isEmpty()) {
+                        deliver(bucket.collidable, except, query, predicate, out, stamp);
+                    }
+                    if (!bucket.pushable.isEmpty()) {
+                        deliver(bucket.pushable, except, query, predicate, out, stamp);
+                    }
+                    if (!bucket.plain.isEmpty()) {
+                        deliver(bucket.plain, except, query, predicate, out, stamp);
+                    }
                 }
             }
         }
@@ -573,9 +580,10 @@ public final class CollisionGrid {
         long stamp = QUERY_ID.incrementAndGet();
         boolean pairAware = self != null && OVERRIDES_CAN_COLLIDE.get(self.getClass());
         Predicate<? super Entity> predicate = pairAware ? hardPredicate(self) : null;
-        for (int cx = cellOf(query.minX) - 1; cx <= cellOf(query.maxX) + 1; cx++) {
-            for (int cy = cellOf(query.minY) - 1; cy <= cellOf(query.maxY) + 1; cy++) {
-                for (int cz = cellOf(query.minZ) - 1; cz <= cellOf(query.maxZ) + 1; cz++) {
+        AABB cellBox = query.inflate(AABB_SWEEP_EPSILON);
+        for (int cx = cellOf(cellBox.minX); cx <= cellOf(cellBox.maxX); cx++) {
+            for (int cy = cellOf(cellBox.minY); cy <= cellOf(cellBox.maxY); cy++) {
+                for (int cz = cellOf(cellBox.minZ); cz <= cellOf(cellBox.maxZ); cz++) {
                     Bucket bucket = buckets.get(BlockPos.asLong(cx, cy, cz));
                     if (bucket == null) {
                         continue;
@@ -601,9 +609,10 @@ public final class CollisionGrid {
 
     private void collectPush(Entity except, AABB query, Predicate<? super Entity> predicate, List<Entity> out) {
         long stamp = QUERY_ID.incrementAndGet();
-        for (int cx = cellOf(query.minX) - 1; cx <= cellOf(query.maxX) + 1; cx++) {
-            for (int cy = cellOf(query.minY) - 1; cy <= cellOf(query.maxY) + 1; cy++) {
-                for (int cz = cellOf(query.minZ) - 1; cz <= cellOf(query.maxZ) + 1; cz++) {
+        AABB cellBox = query.inflate(AABB_SWEEP_EPSILON);
+        for (int cx = cellOf(cellBox.minX); cx <= cellOf(cellBox.maxX); cx++) {
+            for (int cy = cellOf(cellBox.minY); cy <= cellOf(cellBox.maxY); cy++) {
+                for (int cz = cellOf(cellBox.minZ); cz <= cellOf(cellBox.maxZ); cz++) {
                     Bucket bucket = buckets.get(BlockPos.asLong(cx, cy, cz));
                     if (bucket != null && !bucket.pushable.isEmpty()) {
                         deliverPushing(bucket.pushable, except, query, predicate, out, stamp);
